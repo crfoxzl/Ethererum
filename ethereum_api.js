@@ -85,25 +85,37 @@ function onCreate(req, resp) {
 }
 
 function createAccount(info, collection, resp) {
-	var account_info = web3.eth.accounts.new();
-	collection.insert({
+	var account_info = web3.personal.newAccount(info.passwd || '');
+	var new_account = {
         a_id: info.a_id,
         passwd: info.passwd || '',
         address: account_info.address,
         publicKey: account_info.publicKey,
         privateKey: account_info.privateKey,
         isOnline: false
-    }, function(err, data) {
+    };
+
+	collection.insert(new_account, function(err, data) {
         if (err) {
         	console.log('Failed to create account, Err: ' + err);
             writeResponse(resp, { Success: false, Err: "Internal DB Error(insert)" });
             return;
         } else {
-            console.log('Successfully create account');
+            console.log('Successfully create account: ');
+            printInfo(new_account);
             writeResponse(resp, { Success: true });
             return;
         }
     });
+}
+
+function printInfo(obj) {
+	for (var attr in obj) {
+		if (obj.hasOwnProperty(attr)) {
+			console.log(attr + ": " + obj[attr]);
+		}
+	}
+	console.log('\n');
 }
 
 function onCheckBalance(req, resp) {
