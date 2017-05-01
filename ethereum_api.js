@@ -99,14 +99,12 @@ function createAccount(info, collection, resp) {
         a_id: info.a_id,
         passwd: info.passwd || '',
         address: account_info.address,
-        publicKey: account_info.publicKey,
-        privateKey: account_info.privateKey,
         isOnline: false
     };
 
 	collection.insert(new_account, function(err, data) {
         if (err) {
-        	console.log('Failed to create account, Err: ' + err);
+        	console.log('Account created but failed to insert, Err: ' + err);
             writeResponse(resp, { Success: false, Err: "Internal DB Error(insert)" });
             return;
         } else {
