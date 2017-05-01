@@ -94,11 +94,16 @@ function onCreate(req, resp) {
 }
 
 function createAccount(info, collection, resp) {
-	var account_info = web3.personal.newAccount(info.passwd || '');
+	var address = web3.personal.newAccount(info.passwd || '');
+
+	if (!address) {
+		return;
+	}
+
 	var new_account = {
         a_id: info.a_id,
         passwd: info.passwd || '',
-        address: account_info.address,
+        address,
         isOnline: false
     };
 
