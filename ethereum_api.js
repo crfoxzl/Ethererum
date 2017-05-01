@@ -171,7 +171,7 @@ function onLogin(req, resp){
 }
 
 function loginAccount(info, collection, resp){
-	collection.update({'isOnline' : false}, { $set : {'isOnline' : true}
+	collection.update({isOnline : false}, { $set : {isOnline : true}
 	}, function(err, data) {
 		if (err) {
         	console.log('Failed to login, Err: ' + err);
