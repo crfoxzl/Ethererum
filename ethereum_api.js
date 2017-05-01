@@ -261,6 +261,80 @@ function logoutAccount(ip, collection, resp){
 	});
 }
 
+function onChange_passwd(req, resp){
+	if (!req.query.a_id) {
+		writeResponse(resp, { Success: false, Err: "a_id not specified."});
+		return;
+	}
+
+	account_db.open(function(err, account_db) {
+		if (err) {
+			console.log("Error occur on opening db: " + err);
+			writeResponse(resp, { Success: false, Err: "Internal DB Error"});
+			return;
+		}
+
+		account_db.collection('account', function(err, collection) {
+			if (err) {
+				console.log("Error occur on open collection: " + err);
+				writeResponse(resp, { Success: false, Err: "Internal DB Error(collection)"});
+				account_db.close();
+				return;
+			}
+
+			collection.findOne({ a_id: req.query.a_id }, function(err, data) {
+				if (err) {
+					console.log("Error occur on query: " + err);
+					writeResponse(resp, { Success: false, Err: "Internal DB Error(query)"});
+					account_db.close();
+					return;
+				}
+				if (data) {
+					/* Found this account => can change_passwd */
+					var ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+					console.log('Try to change_passwd, account: ' + data.a_id);
+					if (ip === data.user_ip){
+						if(data.isOnline === true){
+							change_passwd(req.query, collection, resp, data.passwd);
+							console.log('account: ' + data.a_id + ' has changed passwd');
+						}
+						else{
+							/* Cannot change passwd */
+							console.log('account: ' + data.a_id + ' has not logged-in');
+							writeResponse(resp, { Success: false, Err: "Account has not logged-in"});
+						}
+					}
+					else if(ip !== data.user_ip){
+						console.log('account: ' + data.a_id + ' wrong user_ip');
+						writeResponse(resp, { Success: false, Err: "Wrong user_ip"});
+					}	
+				} 
+				else {
+					/* Account not found => can' logout */
+					console.log('Account not found');
+					writeResponse(resp, { Success: false, Err: "Account not found(cannot login)"});
+				}
+				account_db.close();
+        	});
+		});
+	});
+}
+
+function change_passwd(info, collection, resp, oldpasswd){
+	collection.update({passwd: oldpasswd}, { $set : {passwd: info.passwd}
+	}, function(err, data) {
+		if (err) {
+        	console.log('Failed to change passwd, Err: ' + err);
+            writeResponse(resp, { Success: false, Err: "Internal DB Error(update)" });
+            return;
+        } else {
+            console.log('Successfully change passwd');
+            writeResponse(resp, { Success: true });
+            return;
+        }
+	});
+}
+
 function executeCommand(cmd) {
 	exec(cmd, function (err, stdout, stderr) {
 		if (err) {
@@ -295,7 +369,8 @@ function checkCurrentAccountBalance(a_id, resp) {
 app.get('/create/', onCreate);
 app.get('/login/', onLogin);
 app.get('/check-balance/', onCheckBalance);
-app.get('/logout/',onLogout);
+app.get('/logout/', onLogout);
+app.get('/change_passwd/', onChange_passwd);
 app.listen(8787,'0.0.0.0');
 
 console.log('Node-Express server is running at 140.112.18.193:8787 ');
