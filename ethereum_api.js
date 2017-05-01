@@ -3,10 +3,13 @@
 var Web3 = require('web3');
 var mongodb = require('mongodb');
 var express = require('express');
+var exec = require('child_process').exec;
 
 var mongodbServer = new mongodb.Server('localhost', 27017, { auto_reconnect: true });
 var account_db = new mongodb.Db('account_db', mongodbServer);
 var app = express();
+
+executeCommand('geth --identity "Node01" --rpc --rpcport "8545" --rpccorsdomain "*" --datadir "/home/pc193/ethereum/chain1/" --port "30303" --rpcapi "db,eth,net,web3,personal" --networkid 196876');
 
 var web3 = new Web3(new Web3.providers.HttpProvider('http://127.0.0.1:8545'));
 
@@ -184,6 +187,17 @@ function loginAccount(info, collection, resp){
 
 function logoutCurrentAccount(){
 	//?
+}
+
+function executeCommand(cmd) {
+	exec(cmd, function (err, stdout, stderr) {
+		if (err) {
+			console.error('Error while executing native command: ' + cmd + '\n msg: ' + err);
+			return;
+		}
+		console.log('stdout: ' + stdout);
+		console.log('stderr: ' + stderr);
+	})
 }
 
 function printInfo(obj) {
