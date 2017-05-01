@@ -109,6 +109,83 @@ function createAccount(info, collection, resp) {
     });
 }
 
+function onLogin(req, resp){
+	if (!req.query.a_id) {
+		writeResponse(resp, { Success: false, Err: "a_id not specified."});
+		return;
+	}
+
+	account_db.open(function(err, account_db) {
+		if (err) {
+			console.log("Error occur on opening db: " + err);
+			writeResponse(resp, { Success: false, Err: "Internal DB Error"});
+			return;
+		}
+
+		account_db.collection('account', function(err, collection) {
+			if (err) {
+				console.log("Error occur on open collection: " + err);
+				writeResponse(resp, { Success: false, Err: "Internal DB Error(collection)"});
+				account_db.close();
+				return;
+			}
+
+			collection.findOne({ a_id: req.query.a_id }, function(err, data) {
+				if (err) {
+					console.log("Error occur on query: " + err);
+					writeResponse(resp, { Success: false, Err: "Internal DB Error(query)"});
+					account_db.close();
+					return;
+				}
+				if (data) {
+					/* Found this account => can login */
+					req.query.passwd = req.query.passwd || '';
+					console.log('Try to login account: ' + data.a_id);
+					if (req.query.passwd === data.passwd){
+						if(data.isOnline === false){
+							loginAccount(req.query, collection, resp);
+							console.log('account: ' + data.a_id + ' logged-in');
+						}
+						else{
+							console.log('account: ' + data.a_id + ' has already logged-in');
+							writeResponse(resp, { Success: false, Err: "Account has already logged-in"});
+						}
+					}
+					else if(req.query.passwd !== data.passwd){
+						console.log('account: ' + data.a_id + ' wrong password');
+						writeResponse(resp, { Success: false, Err: "Wrong password"});
+					}	
+				} 
+				else {
+					/* Account not found => can' login */
+					console.log('Account not found');
+					writeResponse(resp, { Success: false, Err: "Account not found(cannot login)"});
+				}
+				account_db.close();
+        	});
+		});
+	});
+}
+
+function loginAccount(info, collection, resp){
+	collection.update({'isOnline' : false}, { $set : {'isOnline' : true}
+	}, function(err, data) {
+		if (err) {
+        	console.log('Failed to login, Err: ' + err);
+            writeResponse(resp, { Success: false, Err: "Internal DB Error(update)" });
+            return;
+        } else {
+            console.log('Successfully login');
+            writeResponse(resp, { Success: true });
+            return;
+        }
+	});
+}
+
+function logoutCurrentAccount(){
+	//?
+}
+
 function printInfo(obj) {
 	for (var attr in obj) {
 		if (obj.hasOwnProperty(attr)) {
@@ -130,6 +207,7 @@ function checkCurrentAccountBalance(a_id, resp) {
 }
 
 app.get('/create/', onCreate);
+app.get('/login/', onLogin);
 app.get('/check-balance/', onCheckBalance);
 app.listen(8787,'0.0.0.0');
 
