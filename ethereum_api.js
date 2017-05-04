@@ -94,11 +94,16 @@ function onCreate(req, resp) {
 }
 
 function createAccount(info, collection, resp) {
-	var account_info = web3.personal.newAccount(info.passwd || '');
+	var address = web3.personal.newAccount(info.passwd || '');
+
+	if (!address) {
+		return;
+	}
+
 	var new_account = {
         a_id: info.a_id,
         passwd: info.passwd || '',
-        address: account_info.address,
+        address,
         isOnline: false
     };
 
@@ -213,10 +218,52 @@ function printInfo(obj) {
 	console.log('\n');
 }
 
-function onCheckBalance(req, resp) {}
+function onCheckBalance(req, resp) {
+	if (!req.query.a_id) {
+		writeResponse(resp, { Success: false, Err: "a_id not specified."});
+		return;
+	}
 
-function checkCurrentAccountBalance(a_id, resp) {
-	var balanceWei = web3.eth.getBalance(web3.eth.accounts[0]).toNumber();
+	account_db.open(function(err, account_db) {
+		if (err) {
+			console.log("Error occur on opening db: " + err);
+			writeResponse(resp, { Success: false, Err: "Internal DB Error"});
+			return;
+		}
+
+		account_db.collection('account', function(err, collection) {
+			if (err) {
+				console.log("Error occur on open collection: " + err);
+				writeResponse(resp, { Success: false, Err: "Internal DB Error(collection)"});
+				account_db.close();
+				return;
+			}
+
+			collection.findOne({ a_id: req.query.a_id }, function(err, data) {
+				if (err) {
+					console.log("Error occur on query: " + err);
+					writeResponse(resp, { Success: false, Err: "Internal DB Error(query)"});
+					account_db.close();
+					return;
+				}
+				if (data) {
+					/* Found this account => get address */
+					console.log('Account: ' + data.a_id + ' found');
+					checkCurrentAccountBalance(data.address, resp);
+				} 
+				else {
+					/* Account not found */
+					console.log('Account not existed');
+					writeResponse(resp, { Success: false, Err: "Account not existed"});
+				}
+				account_db.close();
+        	});
+		});
+	});
+}
+
+function checkCurrentAccountBalance(addr, resp) {
+	var balanceWei = web3.eth.getBalance(addr).toNumber();
 	var balance = web3.fromWei(balanceWei, 'ether');
 	writeResponse(resp, { Success: true, Balance: "" + balance });
 	return;
