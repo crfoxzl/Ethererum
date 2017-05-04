@@ -1,0 +1,73 @@
+---------------------- Simple Commands ----------------------
+
+initialize:
+geth --identity "Node01" --rpc --rpcport "8080" --rpccorsdomain "*" --datadir "/home/pc193/ethereum/chain1/" --port "30303" --rpcapi "db,eth,net,web3" --networkid 196876 init genesis.json
+
+geth --identity "Node02" --rpc --rpcport "8081" --rpccorsdomain "*" --datadir "/home/pc193/ethereum/chain2/" --port "30304" --rpcapi "db,eth,net,web3" --networkid 196876 init genesis.json
+
+geth --identity "Node02" --rpc --rpcport "8081" --rpccorsdomain "*" --datadir "/home/ethereum/ethereum/chain2/" --port "30304" --rpcapi "db,eth,net,web3" --networkid 196876 init genesis.json
+
+start console:
+geth --identity "Node01" --rpc --rpcport "8080" --rpccorsdomain "*" --datadir "/home/pc193/ethereum/chain1/" --port "30303" --rpcapi "db,eth,net,web3" --networkid 196876 console
+
+geth --identity "Node02" --rpc --rpcport "8081" --rpccorsdomain "*" --datadir "/home/pc193/ethereum/chain2/" --port "30304" --rpcapi "db,eth,net,web3" --networkid 196876 console
+
+geth --identity "Node02" --rpc --rpcport "8001" --rpccorsdomain "*" --datadir "/home/ethereum/ethereum/chain2/" --port "30304" --rpcapi "db,eth,net,web3" --networkid 196876 console
+
+kill process in port:
+fuser -n tcp -k 9001
+
+kill precess by id:
+ps -ef
+sudo kill <PID>
+
+attach to a node instance:
+geth attach ipc://home/pc193/ethereum/chain1/geth.ipc
+
+create account:
+> personal.newAccount("qa1968qa")
+
+list all accounts:
+> eth.accounts
+
+set an account as the etherbase:
+> miner.setEtherbase(personal.listAccounts[0])
+
+start mining:
+> miner.start()
+
+check balance:
+> balance = web3.fromWei(eth.getBalance(eth.accounts[0]), "ether")
+
+show enode info(for joining networks):
+> admin.nodeInfo.enode
+
+add peer:
+> admin.addPeer("enode://...")
+
+unlock account(before transaction):
+> personal.unlockAccount("0x...")
+
+send 1000 ether:
+> eth.sendTransaction({from: "0x...", to: "0x...", value: web3.toWei(1, "ether")})
+
+---------------------- Setting-up A Cluster ----------------------
+
+add peer(** different datadir, port, rpcport):
+> admin.addPeer(<enode>)
+
+check peer:
+> net.listening
+> net.peerCount
+> admin.peers
+
+
+---------------------- IPC API ----------------------
+list accounts:
+> echo '{"jsonrpc":"2.0","method":"personal_listAccounts","params":[],"id":1}' | socat -,ignoreeof  UNIX-CONNECT:/home/pc193/ethereum/chain1/geth.ipc
+
+unlock account:
+> echo '{"jsonrpc":"2.0","method":"personal_unlockAccount","params":["<address>", "<passwd>"],"i | socat -,ignoreeof  UNIX-CONNECT:/home/pc193/ethereum/chain1/geth.ipc
+
+lock account:
+> echo '{"jsonrpc":"2.0","method":"personal_lockAccount","params":["<address>"],"id":1}' | socat -,ioreeof  UNIX-CONNECT:/home/pc193/ethereum/chain1/geth.ipc
