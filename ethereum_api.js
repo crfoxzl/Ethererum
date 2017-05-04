@@ -79,6 +79,7 @@ function createAccount(info, collection, resp) {
         a_id: info.a_id,
         passwd: info.passwd || '',
         address,
+        user_ip: '',
         isOnline: false
     };
 
@@ -130,7 +131,7 @@ function onLogin(req, resp){
 					console.log('Try to login account: ' + data.a_id);
 					if (req.query.passwd === data.passwd){
 						if(data.isOnline === false){
-							loginAccount(req.query, collection, resp);
+							loginAccount(req, collection, resp);
 							console.log('account: ' + data.a_id + ' logged-in');
 						}
 						else{
@@ -154,8 +155,9 @@ function onLogin(req, resp){
 	});
 }
 
-function loginAccount(info, collection, resp){
-	collection.update({isOnline : false}, { $set : {isOnline : true}
+function loginAccount(info, collection, resp) {
+	var curr_ip = info.headers['x-forwarded-for'] || info.connection.remoteAddress;
+	collection.update({isOnline : false, user_ip : ''}, { $set : {isOnline : true, user_ip : curr_ip}
 	}, function(err, data) {
 		if (err) {
         	console.log('Failed to login, Err: ' + err);
@@ -169,8 +171,152 @@ function loginAccount(info, collection, resp){
 	});
 }
 
-function logoutCurrentAccount(){
-	//?
+function onLogout(req, resp) {
+	if (!req.query.a_id) {
+		writeResponse(resp, { Success: false, Err: "a_id not specified."});
+		return;
+	}
+
+	account_db.open(function(err, account_db) {
+		if (err) {
+			console.log("Error occur on opening db: " + err);
+			writeResponse(resp, { Success: false, Err: "Internal DB Error"});
+			return;
+		}
+
+		account_db.collection('account', function(err, collection) {
+			if (err) {
+				console.log("Error occur on open collection: " + err);
+				writeResponse(resp, { Success: false, Err: "Internal DB Error(collection)"});
+				account_db.close();
+				return;
+			}
+
+			collection.findOne({ a_id: req.query.a_id }, function(err, data) {
+				if (err) {
+					console.log("Error occur on query: " + err);
+					writeResponse(resp, { Success: false, Err: "Internal DB Error(query)"});
+					account_db.close();
+					return;
+				}
+				if (data) {
+					/* Found this account => can logout */
+					var curr_ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+					console.log('Try to logout account: ' + data.a_id);
+					if (curr_ip === data.user_ip){
+						if(data.isOnline === true){
+							logoutAccount(data.a_id, curr_ip, collection, resp);
+							console.log('account: ' + data.a_id + ' logged-out');
+						}
+						else{
+							/* Cannot logout */
+							console.log('account: ' + data.a_id + ' has not logged-in');
+							writeResponse(resp, { Success: false, Err: "Account has not logged-in"});
+						}
+					}
+					else {
+						console.log('account: ' + data.a_id + ' wrong user_ip');
+						writeResponse(resp, { Success: false, Err: "Wrong user_ip"});
+					}
+				}
+				else {
+					/* Account not found => can' logout */
+					console.log('Account not found');
+					writeResponse(resp, { Success: false, Err: "Account not found(cannot login)"});
+				}
+				account_db.close();
+			});
+		});
+	});
+}
+
+function logoutAccount(a_id, ip, collection, resp){
+	collection.update({a_id, isOnline : true, user_ip : ip}, { $set : {isOnline : false, user_ip : ''}
+	}, function(err, data) {
+		if (err) {
+        	console.log('Failed to logout, Err: ' + err);
+            writeResponse(resp, { Success: false, Err: "Internal DB Error(update)" });
+            return;
+        } else {
+            console.log('Successfully logout');
+            writeResponse(resp, { Success: true });
+            return;
+        }
+	});
+}
+
+function onChangePasswd(req, resp){
+	if (!req.query.a_id) {
+		writeResponse(resp, { Success: false, Err: "a_id not specified."});
+		return;
+	}
+
+	account_db.open(function(err, account_db) {
+		if (err) {
+			console.log("Error occur on opening db: " + err);
+			writeResponse(resp, { Success: false, Err: "Internal DB Error"});
+			return;
+		}
+
+		account_db.collection('account', function(err, collection) {
+			if (err) {
+				console.log("Error occur on open collection: " + err);
+				writeResponse(resp, { Success: false, Err: "Internal DB Error(collection)"});
+				account_db.close();
+				return;
+			}
+
+			collection.findOne({ a_id: req.query.a_id }, function(err, data) {
+				if (err) {
+					console.log("Error occur on query: " + err);
+					writeResponse(resp, { Success: false, Err: "Internal DB Error(query)"});
+					account_db.close();
+					return;
+				}
+				if (data) {
+					/* Found this account => can change passwd */
+					var curr_ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+					console.log('Try to change passwd, account: ' + data.a_id);
+					if (curr_ip === data.user_ip){
+						if(data.isOnline === true){
+							changePasswd(req.query, collection, resp, data.passwd);
+							console.log('account: ' + data.a_id + ' has changed passwd');
+						}
+						else{
+							/* Cannot change passwd */
+							console.log('account: ' + data.a_id + ' has not logged-in');
+							writeResponse(resp, { Success: false, Err: "Account has not logged-in"});
+						}
+					}
+					else {
+						console.log('account: ' + data.a_id + ' wrong user_ip');
+						writeResponse(resp, { Success: false, Err: "Wrong user_ip"});
+					}
+				}
+				else {
+					/* Account not found => can' logout */
+					console.log('Account not found');
+					writeResponse(resp, { Success: false, Err: "Account not found(cannot login)"});
+				}
+				account_db.close();
+        	});
+		});
+	});
+}
+
+function changePasswd(info, collection, resp, oldpasswd){
+	collection.update({passwd: oldpasswd}, { $set : {passwd: info.passwd}
+	}, function(err, data) {
+		if (err) {
+        	console.log('Failed to change passwd, Err: ' + err);
+            writeResponse(resp, { Success: false, Err: "Internal DB Error(update)" });
+            return;
+        } else {
+            console.log('Successfully change passwd');
+            writeResponse(resp, { Success: true });
+            return;
+        }
+	});
 }
 
 function executeCommand(cmd) {
@@ -247,5 +393,7 @@ function checkCurrentAccountBalance(addr, resp) {
 console.log('Node-Express server is running at 140.112.18.193:8787 ');
 app.get('/create/', onCreate);
 app.get('/login/', onLogin);
+app.get('/logout/', onLogout);
+app.get('/change-passwd/', onChangePasswd);
 app.get('/check-balance/', onCheckBalance);
 app.listen(8787,'0.0.0.0');
