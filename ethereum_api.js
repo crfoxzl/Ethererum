@@ -1,6 +1,12 @@
 #!/usr/bin/env nodejs
 
-// var http = require('http');
+// TODO:
+// (1) Unlock Account on login
+// (2) Lock Account on logout
+// (3) Transfer
+// (4) Restful
+// (5) Inter-Machine operation by WebSocket
+
 var Web3 = require('web3');
 var mongodb = require('mongodb');
 var express = require('express');
@@ -14,38 +20,7 @@ executeCommand('geth --identity "Node01" --rpc --rpcport "8545" --rpccorsdomain 
 
 var web3 = new Web3(new Web3.providers.HttpProvider('http://127.0.0.1:8545'));
 
-// var handleRequest = function(req, resp) {
-// 	var parts = url.parse(req.url, true);
-// 	var query = parts.query;
-
-// 	switch(query.method) {
-// 	case 'create':
-// 		createAccount(query.a_id, query.passwd, resp);
-// 		break;
-// 	case 'login':
-// 		loginAccount(query.a_id, query.passwd);
-// 		break;
-// 	case 'logout':
-// 		logoutCurrentAccount();
-// 		break;
-// 	case 'transfer':
-// 		transferTo(query.recv_id, query.amount);
-// 		break;
-// 	case 'checkBalance':
-// 		checkCurrentAccountBalance(query.a_id, resp);
-// 		break;
-// 	default:
-// 		writeResponse(resp, { Success: false, Err : "Wrong Query" });
-// 		break;
-// 	}
-
-// 	// resp.writeHead(200, {'Content-Type': 'text/plain'});
-// 	// resp.end("" + JSON.stringify(result));
-// }
-
 function writeResponse(resp, result) {
-	// resp.writeHead(200, {'Content-Type': 'text/plain'});
-	// resp.end("" + JSON.stringify(result));
 	resp.send("" + JSON.stringify(result));
 }
 
@@ -274,50 +249,3 @@ app.get('/create/', onCreate);
 app.get('/login/', onLogin);
 app.get('/check-balance/', onCheckBalance);
 app.listen(8787,'0.0.0.0');
-// var web3 = new Web3(new Web3.providers.HttpProvider('http://127.0.0.1:8545'));
-// web3.eth.getAccounts(console.log);
-
-// var balanceWei = web3.eth.getBalance(web3.eth.accounts[0]).toNumber();
-// var balance = web3.fromWei(balanceWei, 'ether');
-// console.log("balance: " + balance);
-
-// var mining = web3.eth.mining;
-
-// console.log(mining);
-// var balance = web3.eth.getBalance(coinbase);
-
-// console.log(web3.version.api);
-
-/* open db */
-// account_db.open(function(err, account_db) {
-// 	if (err) {
-// 		console.log("Error occur on open db: " + err);
-// 	}
-//     /* Select 'account' collection */
-// 	// account_db.collection('account', function(err, collection) {
-//         /* Insert a data */
-//     //    collection.insert({
-//     //        a_id: 'tom6311tom6311',
-//     //        passwd: 'qa1968qa'
-//     //    }, function(err, data) {
-//     //        if (data) {
-//     //            console.log('Successfully Insert');
-//     //        } else {
-//     //            console.log('Failed to Insert, Err: ' + err);
-//     //        }
-//     //    });
-// 	// });
-
-// 	account_db.collection('account', function(err, collection) {
-//         /* Querying */
-//         collection.findOne({ a_id: 'tom6311tom6311' }, function(err, data) {
-//             /* Found this People */
-//             if (data) {
-// 				// console.log(data);
-//                 console.log('account: ' + data.a_id + ', password: ' + data.passwd);
-//             } else {
-//                 console.log('Cannot found');
-//             }
-//         });
-//     });
-// });
