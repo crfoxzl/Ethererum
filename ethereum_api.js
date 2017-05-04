@@ -14,13 +14,26 @@
 var Web3 = require('web3');
 var mongodb = require('mongodb');
 var express = require('express');
-var exec = require('child_process').exec;
+var spawn = require('child_process').spawn;
 
 var mongodbServer = new mongodb.Server('localhost', 27017, { auto_reconnect: true });
 var account_db = new mongodb.Db('account_db', mongodbServer);
 var app = express();
 
-executeCommand('geth --identity "Node01" --rpc --rpcport "8545" --rpccorsdomain "*" --datadir "/home/pc193/ethereum/chain1/" --port "30303" --rpcapi "db,eth,net,web3,personal" --networkid 196876');
+var startGethCmd = spawn('geth',['--identity', 'Node01', '--rpc', '--rpcport', '8545', '--rpccorsdomain', '*', '--datadir', '/home/pc193/ethereum/chain1/', '--port', '30303', '--rpcapi', 'db,eth,net,web3,personal', '--networkid', 196876]);
+
+startGethCmd.stdout.on('data', function (data) {
+	console.log('stdout: ' + data.toString());
+});
+
+startGethCmd.stderr.on('data', function (data) {
+	console.log('stderr: ' + data.toString());
+});
+
+startGethCmd.on('exit', function (code) {
+	console.log('child process exited with code ' + code.toString());
+});
+
 
 var web3 = new Web3(new Web3.providers.HttpProvider('http://127.0.0.1:8545'));
 
@@ -175,6 +188,10 @@ function loginAccount(info, collection, resp) {
 	});
 }
 
+function unlockAccount(address) {
+
+}
+
 function onLogout(req, resp) {
 	if (!req.query.a_id) {
 		writeResponse(resp, { Success: false, Err: "a_id not specified."});
@@ -321,17 +338,6 @@ function changePasswd(info, collection, resp, oldpasswd){
             return;
         }
 	});
-}
-
-function executeCommand(cmd) {
-	exec(cmd, function (err, stdout, stderr) {
-		if (err) {
-			console.error('Error while executing native command: ' + cmd + '\n msg: ' + err);
-			return;
-		}
-		console.log('stdout: ' + stdout);
-		console.log('stderr: ' + stderr);
-	})
 }
 
 function printInfo(obj) {
