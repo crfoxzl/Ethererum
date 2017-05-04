@@ -4,8 +4,12 @@
 // (1) Unlock Account on login
 // (2) Lock Account on logout
 // (3) Transfer
-// (4) Restful
-// (5) Inter-Machine operation by WebSocket
+// (4) Admin-logout
+// (5) Auto-logout
+// (6) Init balance: 1000 eth
+// (7) Drop accounts(Mongo, Geth)
+// (8) Inter-Machine operation by WebSocket
+// (9) Restful API
 
 var Web3 = require('web3');
 var mongodb = require('mongodb');
@@ -305,24 +309,6 @@ function onChangePasswd(req, resp){
 }
 
 function changePasswd(info, collection, resp, oldpasswd){
-	collection.findOne({ a_id: info.a_id }, function(err, data) {
-		if (err) {
-			console.log("Error occur on query: " + err);
-			writeResponse(resp, { Success: false, Err: "Internal DB Error(query)"});
-			account_db.close();
-			return;
-		}
-		if (data) {
-			printInfo(data);
-		}
-		else {
-			/* Account not found => can' logout */
-			console.log('Account not found');
-			writeResponse(resp, { Success: false, Err: "Account not found(cannot login)"});
-		}
-	});
-
-
 	collection.update({a_id: info.a_id, passwd: oldpasswd}, { $set : {passwd: info.passwd}
 	}, function(err, data) {
 		if (err) {
