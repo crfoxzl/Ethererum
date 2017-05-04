@@ -305,7 +305,25 @@ function onChangePasswd(req, resp){
 }
 
 function changePasswd(info, collection, resp, oldpasswd){
-	collection.update({passwd: oldpasswd}, { $set : {passwd: info.passwd}
+	collection.findOne({ a_id: info.a_id }, function(err, data) {
+		if (err) {
+			console.log("Error occur on query: " + err);
+			writeResponse(resp, { Success: false, Err: "Internal DB Error(query)"});
+			account_db.close();
+			return;
+		}
+		if (data) {
+			printInfo(data);
+		}
+		else {
+			/* Account not found => can' logout */
+			console.log('Account not found');
+			writeResponse(resp, { Success: false, Err: "Account not found(cannot login)"});
+		}
+	});
+
+
+	collection.update({a_id: info.a_id, passwd: oldpasswd}, { $set : {passwd: info.passwd}
 	}, function(err, data) {
 		if (err) {
         	console.log('Failed to change passwd, Err: ' + err);
