@@ -1,8 +1,8 @@
 #!/usr/bin/env nodejs
 
 // TODO:
-// (1) Unlock Account on login
-// (2) Lock Account on logout
+// (1) V Unlock Account on login
+// (2) V Lock Account on logout
 // (3) Transfer
 // (4) Admin-logout
 // (5) Auto-logout
@@ -16,24 +16,36 @@ var mongodb = require('mongodb');
 var express = require('express');
 var spawn = require('child_process').spawn;
 
+const NODE_IDENTITY = 'Node01';
+const BLOCK_DATA_DIR = '/home/pc193/ethereum/chain1/';
+const GETH_LISTEN_PORT = '30303';
+const RPC_PORT = '8545';
+const RPC_URL = '127.0.0.1:' + RPC_PORT;
+const RPC_DOMAIN = '*';
+const RPC_API = 'db,eth,net,web3,personal';
+const NETWORK_ID = 196876;
+
 var mongodbServer = new mongodb.Server('localhost', 27017, { auto_reconnect: true });
 var account_db = new mongodb.Db('account_db', mongodbServer);
 var app = express();
+var startGethCmd;
+var createAccountCmd;
+var unlockAccountCmd;
+var lockAccountCmd;
 
-var startGethCmd = spawn('geth',['--identity', 'Node01', '--rpc', '--rpcport', '8545', '--rpccorsdomain', '*', '--datadir', '/home/pc193/ethereum/chain1/', '--port', '30303', '--rpcapi', 'db,eth,net,web3,personal', '--networkid', 196876]);
+startGethCmd = spawn('geth', ['--identity', NODE_IDENTITY, '--rpc', '--rpcport', RPC_PORT, '--rpccorsdomain', RPC_DOMAIN, '--datadir', BLOCK_DATA_DIR, '--port', GETH_LISTEN_PORT, '--rpcapi', RPC_API, '--networkid', NETWORK_ID]);
 
-startGethCmd.stdout.on('data', function (data) {
-	console.log('stdout: ' + data.toString());
-});
+// startGethCmd.stdout.on('data', function (data) {
+// 	console.log('stdout: ' + data.toString());
+// });
 
-startGethCmd.stderr.on('data', function (data) {
-	console.log('stderr: ' + data.toString());
-});
+// startGethCmd.stderr.on('data', function (data) {
+// 	console.log('stderr: ' + data.toString());
+// });
 
 startGethCmd.on('exit', function (code) {
-	console.log('child process exited with code ' + code.toString());
+	console.log('Geth child process exited with code ' + code.toString());
 });
-
 
 var web3 = new Web3(new Web3.providers.HttpProvider('http://127.0.0.1:8545'));
 
@@ -66,9 +78,10 @@ function onCreate(req, resp) {
 				if (err) {
 					console.log("Error occur on query: " + err);
 					writeResponse(resp, { Success: false, Err: "Internal DB Error(query)"});
-					account_db.close();
 					return;
 				}
+
+				account_db.close();
 	         	
 				if (data) {
 					/* Found this account => cannot create again */
@@ -77,41 +90,82 @@ function onCreate(req, resp) {
 				} else {
 					/* Account not found => can create */
 					console.log('Can create account');
-					createAccount(req.query, collection, resp);
+					createAccount(req.query, resp);
 				}
-				account_db.close();
         	});
 		});
 	});
 }
 
-function createAccount(info, collection, resp) {
-	var address = web3.personal.newAccount(info.passwd || '');
+function createAccount(info, resp) {
+	var createRPC = {
+		jsonrpc: '2.0',
+		method: 'personal_newAccount',
+		params: [info.passwd],
+		id: 1
+	};
+	createAccountCmd = spawn('curl', ['-X', 'POST', '--data', JSON.stringify(createRPC), RPC_URL]);
 
-	if (!address) {
-		return;
-	}
+	createAccountCmd.stdout.on('data', function (data) {
+		data = JSON.parse(data);
+		if (!data.result) {
+			console.log('Failed to create account, Err: ' + data.toString());
+			writeResponse(resp, { Success: false, Err: "Geth Error When Creating Account" });
+		}
+		else {
+			var address = data.result;
+			var new_account = {
+				a_id: info.a_id,
+				passwd: info.passwd || '',
+				address,
+				user_ip: '',
+				isOnline: false
+			};
 
-	var new_account = {
-        a_id: info.a_id,
-        passwd: info.passwd || '',
-        address,
-        user_ip: '',
-        isOnline: false
-    };
+			account_db.open(function(err, account_db) {
+				if (err) {
+					console.log("Error occur on opening db: " + err);
+					writeResponse(resp, { Success: false, Err: "Internal DB Error"});
+					return;
+				}
 
-	collection.insert(new_account, function(err, data) {
-        if (err) {
-        	console.log('Account created but failed to insert, Err: ' + err);
-            writeResponse(resp, { Success: false, Err: "Internal DB Error(insert)" });
-            return;
-        } else {
-            console.log('Successfully create account: ');
-            printInfo(new_account);
-            writeResponse(resp, { Success: true });
-            return;
-        }
-    });
+				account_db.collection('account', function(err, collection) {
+					if (err) {
+						console.log("Error occur on open collection: " + err);
+						writeResponse(resp, { Success: false, Err: "Internal DB Error(collection)"});
+						account_db.close();
+						return;
+					}
+
+					collection.insert(new_account, function(err, data) {
+						if (err) {
+							console.log('Account created but failed to insert, Err: ' + err);
+							writeResponse(resp, { Success: false, Err: "Internal DB Error(insert)" });
+							account_db.close();
+							return;
+						} else {
+							console.log('Successfully create account: ');
+							printInfo(new_account);
+							writeResponse(resp, { Success: true });
+							account_db.close();
+							return;
+						}
+					});
+					
+				});
+			});
+		}
+	});
+
+	// createAccountCmd.stderr.on('data', function (data) {
+	// 	console.log('stderr: ' + data.toString());
+	// });
+
+	// createAccountCmd.on('exit', function (code) {
+	// 	console.log('Geth child process exited with code ' + code.toString());
+	// });
+
+	// var address = web3.personal.newAccount(info.passwd || '');
 }
 
 function onLogin(req, resp){
@@ -148,7 +202,7 @@ function onLogin(req, resp){
 					console.log('Try to login account: ' + data.a_id);
 					if (req.query.passwd === data.passwd){
 						if(data.isOnline === false){
-							loginAccount(req, collection, resp);
+							loginAccount(req, data, collection, resp);
 							console.log('account: ' + data.a_id + ' logged-in');
 						}
 						else{
@@ -172,24 +226,77 @@ function onLogin(req, resp){
 	});
 }
 
-function loginAccount(info, collection, resp) {
+function loginAccount(info, account_data, collection, resp) {
 	var curr_ip = info.headers['x-forwarded-for'] || info.connection.remoteAddress;
-	collection.update({isOnline : false, user_ip : ''}, { $set : {isOnline : true, user_ip : curr_ip}
+	collection.update({a_id: account_data.a_id, isOnline : false, user_ip : ''}, { $set : {isOnline : true, user_ip : curr_ip}
 	}, function(err, data) {
 		if (err) {
         	console.log('Failed to login, Err: ' + err);
             writeResponse(resp, { Success: false, Err: "Internal DB Error(update)" });
             return;
         } else {
-            console.log('Successfully login');
+            console.log('Successfully login, unlocking account...');
+			unlockAccount(account_data.address, account_data.passwd);
             writeResponse(resp, { Success: true });
             return;
         }
 	});
 }
 
-function unlockAccount(address) {
+function unlockAccount(address, passwd) {
+	var unlockRPC = {
+		jsonrpc: '2.0',
+		method: 'personal_unlockAccount',
+		params: [address, passwd],
+		id: 1
+	};
+	unlockAccountCmd = spawn('curl', ['-X', 'POST', '--data', JSON.stringify(unlockRPC), RPC_URL]);
 
+	unlockAccountCmd.stdout.on('data', function (data) {
+		data = JSON.parse(data);
+		if (data.result !== true) {
+			console.log('Failed to unlock account, Err:' + data.toString());
+		}
+		else {
+			console.log('Successfully unlock account.');
+		}
+	});
+
+	// unlockAccountCmd.stderr.on('data', function (data) {
+	// 	console.log('stderr: ' + data.toString());
+	// });
+
+	// unlockAccountCmd.on('exit', function (code) {
+	// 	console.log('Geth child process exited with code ' + code.toString());
+	// });
+}
+
+function lockAccount(account_data) {
+	var lockRPC = {
+		jsonrpc: '2.0',
+		method: 'personal_lockAccount',
+		params: [account_data.address],
+		id: 1
+	};
+	lockAccountCmd = spawn('curl', ['-X', 'POST', '--data', JSON.stringify(lockRPC), RPC_URL]);
+
+	lockAccountCmd.stdout.on('data', function (data) {
+		data = JSON.parse(data);
+		if (data.result !== true) {
+			console.log('Failed to lock account, Err:' + data.toString());
+		}
+		else {
+			console.log('Successfully lock account.');
+		}
+	});
+
+	// lockAccountCmd.stderr.on('data', function (data) {
+	// 	console.log('stderr: ' + data.toString());
+	// });
+
+	// lockAccountCmd.on('exit', function (code) {
+	// 	console.log('Geth child process exited with code ' + code.toString());
+	// });
 }
 
 function onLogout(req, resp) {
@@ -226,7 +333,7 @@ function onLogout(req, resp) {
 					console.log('Try to logout account: ' + data.a_id);
 					if (curr_ip === data.user_ip){
 						if(data.isOnline === true){
-							logoutAccount(data.a_id, curr_ip, collection, resp);
+							logoutAccount(data, curr_ip, collection, resp);
 							console.log('account: ' + data.a_id + ' logged-out');
 						}
 						else{
@@ -251,15 +358,16 @@ function onLogout(req, resp) {
 	});
 }
 
-function logoutAccount(a_id, ip, collection, resp){
-	collection.update({a_id, isOnline : true, user_ip : ip}, { $set : {isOnline : false, user_ip : ''}
+function logoutAccount(account_data, ip, collection, resp){
+	collection.update({a_id: account_data.a_id, isOnline : true, user_ip : ip}, { $set : {isOnline : false, user_ip : ''}
 	}, function(err, data) {
 		if (err) {
         	console.log('Failed to logout, Err: ' + err);
             writeResponse(resp, { Success: false, Err: "Internal DB Error(update)" });
             return;
         } else {
-            console.log('Successfully logout');
+            console.log('Successfully logout, locking account...');
+			lockAccount(account_data);
             writeResponse(resp, { Success: true });
             return;
         }
