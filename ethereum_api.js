@@ -32,6 +32,7 @@ var startGethCmd;
 var createAccountCmd;
 var unlockAccountCmd;
 var lockAccountCmd;
+var checkBalanceCmd;
 
 startGethCmd = spawn('geth', ['--identity', NODE_IDENTITY, '--rpc', '--rpcport', RPC_PORT, '--rpccorsdomain', RPC_DOMAIN, '--datadir', BLOCK_DATA_DIR, '--port', GETH_LISTEN_PORT, '--rpcapi', RPC_API, '--networkid', NETWORK_ID]);
 
@@ -502,9 +503,35 @@ function onCheckBalance(req, resp) {
 }
 
 function checkCurrentAccountBalance(addr, resp) {
-	var balanceWei = web3.eth.getBalance(addr).toNumber();
-	var balance = web3.fromWei(balanceWei, 'ether');
-	writeResponse(resp, { Success: true, Balance: "" + balance });
+	var chackBalanceRPC = {
+		jsonrpc: '2.0',
+		method: 'eth_getBalance',
+		params: [addr, "latest"],
+		id: 1
+	};
+	checkBalanceCmd = spawn('curl', ['-X', 'POST', '--data', JSON.stringify(chackBalanceRPC), RPC_URL]);
+
+	checkBalanceCmd.stdout.on('data', function (data) {
+		data = JSON.parse(data);
+		if (!data.result) {
+			console.log('Failed to check account balance, Err:' + data.toString());
+			writeResponse(resp, { Success: false, Err: "Geth error on checking balance" });
+		}
+		else {
+			console.log('Successfully get account balance.');
+			var balance = web3.fromWei(parseInt(data.result), 'ether');
+			writeResponse(resp, { Success: true, Balance: "" + balance });
+		}
+	});
+
+	// checkBalanceCmd.stderr.on('data', function (data) {
+	// 	console.log('stderr: ' + data.toString());
+	// });
+
+	// checkBalanceCmd.on('exit', function (code) {
+	// 	console.log('Geth child process exited with code ' + code.toString());
+	// });
+
 	return;
 }
 
