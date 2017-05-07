@@ -67,7 +67,7 @@ list accounts:
 > echo '{"jsonrpc":"2.0","method":"personal_listAccounts","params":[],"id":1}' | socat -,ignoreeof  UNIX-CONNECT:/home/pc193/ethereum/chain1/geth.ipc
 
 unlock account:
-> echo '{"jsonrpc":"2.0","method":"personal_unlockAccount","params":["<address>", "<passwd>"],"i | socat -,ignoreeof  UNIX-CONNECT:/home/pc193/ethereum/chain1/geth.ipc
+> echo '{"jsonrpc":"2.0","method":"personal_unlockAccount","params":["<address>", "<passwd>"],"id":1}' | socat -,ignoreeof  UNIX-CONNECT:/home/pc193/ethereum/chain1/geth.ipc
 
 lock account:
 > echo '{"jsonrpc":"2.0","method":"personal_lockAccount","params":["<address>"],"id":1}' | socat -,ioreeof  UNIX-CONNECT:/home/pc193/ethereum/chain1/geth.ipc
