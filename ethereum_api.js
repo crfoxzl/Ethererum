@@ -344,6 +344,17 @@ function onLogout(req, resp) {
 						}
 					}
 					else {
+						if (req.query.a_id === 'admin'){
+							if(data.isOnline === true){
+								logoutAccount(data, data.ip, collection, resp);
+								console.log('Admin : ' + data.a_id + 'successfully logged-out');
+							}
+							else{
+								/* Cannot logout */
+								console.log('Admin : ' + req.query.a_id + ' has not logged-in');
+								writeResponse(resp, { Success: false, Err: "Account has not logged-in"});
+							}
+						}
 						console.log('account: ' + data.a_id + ' wrong user_ip');
 						writeResponse(resp, { Success: false, Err: "Wrong user_ip"});
 					}
