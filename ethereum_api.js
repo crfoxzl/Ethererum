@@ -3,7 +3,7 @@
 // TODO:
 // (1) V Unlock Account on login
 // (2) V Lock Account on logout
-// (3) Transfer
+// (3) V Transfer
 // (4) Admin-logout
 // (5) Auto-logout
 // (6) Init balance: 1000 eth
@@ -24,6 +24,7 @@ const RPC_URL = '127.0.0.1:' + RPC_PORT;
 const RPC_DOMAIN = '*';
 const RPC_API = 'db,eth,net,web3,personal';
 const NETWORK_ID = 196876;
+const ETHER_BASE = "0xcc0ca8be2b7b6dac72748cc213d611d2f0e5b624";
 
 var mongodbServer = new mongodb.Server('localhost', 27017, { auto_reconnect: true });
 var account_db = new mongodb.Db('account_db', mongodbServer);
@@ -34,14 +35,14 @@ var unlockAccountCmd;
 var lockAccountCmd;
 var checkBalanceCmd;
 
-startGethCmd = spawn('geth', ['--identity', NODE_IDENTITY, '--rpc', '--rpcport', RPC_PORT, '--rpccorsdomain', RPC_DOMAIN, '--datadir', BLOCK_DATA_DIR, '--port', GETH_LISTEN_PORT, '--rpcapi', RPC_API, '--networkid', NETWORK_ID]);
+startGethCmd = spawn('geth', ['--identity', NODE_IDENTITY, '--rpc', '--rpcport', RPC_PORT, '--rpccorsdomain', RPC_DOMAIN, '--datadir', BLOCK_DATA_DIR, '--port', GETH_LISTEN_PORT, '--rpcapi', RPC_API, '--networkid', NETWORK_ID, '--etherbase', ETHER_BASE, '--mine']);
 
 // startGethCmd.stdout.on('data', function (data) {
-// 	console.log('stdout: ' + data.toString());
+// 	console.log('stdout: ' + JSON.stringify(data.error));
 // });
 
 // startGethCmd.stderr.on('data', function (data) {
-// 	console.log('stderr: ' + data.toString());
+// 	console.log('stderr: ' + JSON.stringify(data.error));
 // });
 
 startGethCmd.on('exit', function (code) {
@@ -110,7 +111,7 @@ function createAccount(info, resp) {
 	createAccountCmd.stdout.on('data', function (data) {
 		data = JSON.parse(data);
 		if (!data.result) {
-			console.log('Failed to create account, Err: ' + data.toString());
+			console.log('Failed to create account, Err: ' + JSON.stringify(data.error));
 			writeResponse(resp, { Success: false, Err: "Geth Error When Creating Account" });
 		}
 		else {
@@ -159,7 +160,7 @@ function createAccount(info, resp) {
 	});
 
 	// createAccountCmd.stderr.on('data', function (data) {
-	// 	console.log('stderr: ' + data.toString());
+	// 	console.log('stderr: ' + JSON.stringify(data.error));
 	// });
 
 	// createAccountCmd.on('exit', function (code) {
@@ -256,7 +257,7 @@ function unlockAccount(address, passwd) {
 	unlockAccountCmd.stdout.on('data', function (data) {
 		data = JSON.parse(data);
 		if (data.result !== true) {
-			console.log('Failed to unlock account, Err:' + data.toString());
+			console.log('Failed to unlock account, Err:' + JSON.stringify(data.error));
 		}
 		else {
 			console.log('Successfully unlock account.');
@@ -264,7 +265,7 @@ function unlockAccount(address, passwd) {
 	});
 
 	// unlockAccountCmd.stderr.on('data', function (data) {
-	// 	console.log('stderr: ' + data.toString());
+	// 	console.log('stderr: ' + JSON.stringify(data.error));
 	// });
 
 	// unlockAccountCmd.on('exit', function (code) {
@@ -284,7 +285,7 @@ function lockAccount(account_data) {
 	lockAccountCmd.stdout.on('data', function (data) {
 		data = JSON.parse(data);
 		if (data.result !== true) {
-			console.log('Failed to lock account, Err:' + data.toString());
+			console.log('Failed to lock account, Err:' + JSON.stringify(data.error));
 		}
 		else {
 			console.log('Successfully lock account.');
@@ -292,7 +293,7 @@ function lockAccount(account_data) {
 	});
 
 	// lockAccountCmd.stderr.on('data', function (data) {
-	// 	console.log('stderr: ' + data.toString());
+	// 	console.log('stderr: ' + JSON.stringify(data.error));
 	// });
 
 	// lockAccountCmd.on('exit', function (code) {
@@ -514,7 +515,7 @@ function checkCurrentAccountBalance(addr, resp) {
 	checkBalanceCmd.stdout.on('data', function (data) {
 		data = JSON.parse(data);
 		if (!data.result) {
-			console.log('Failed to check account balance, Err:' + data.toString());
+			console.log('Failed to check account balance, Err:' + JSON.stringify(data.error));
 			writeResponse(resp, { Success: false, Err: "Geth error on checking balance" });
 		}
 		else {
@@ -525,10 +526,146 @@ function checkCurrentAccountBalance(addr, resp) {
 	});
 
 	// checkBalanceCmd.stderr.on('data', function (data) {
-	// 	console.log('stderr: ' + data.toString());
+	// 	console.log('stderr: ' + JSON.stringify(data.error));
 	// });
 
 	// checkBalanceCmd.on('exit', function (code) {
+	// 	console.log('Geth child process exited with code ' + code.toString());
+	// });
+
+	return;
+}
+
+function onTransfer(req, resp) {
+	if (!req.query.a_id) {
+		writeResponse(resp, { Success: false, Err: "a_id not specified."});
+		return;
+	}
+
+	if (!req.query.to_id) {
+		writeResponse(resp, { Success: false, Err: "to_id not specified."});
+		return;
+	}
+
+	if (!req.query.amount) {
+		writeResponse(resp, { Success: false, Err: "amount not specified."});
+		return;
+	}
+
+	account_db.open(function(err, account_db) {
+		if (err) {
+			console.log("Error occur on opening db: " + err);
+			writeResponse(resp, { Success: false, Err: "Internal DB Error"});
+			return;
+		}
+
+		account_db.collection('account', function(err, collection) {
+			if (err) {
+				console.log("Error occur on open collection: " + err);
+				writeResponse(resp, { Success: false, Err: "Internal DB Error(collection)"});
+				account_db.close();
+				return;
+			}
+
+			collection.findOne({ a_id: req.query.a_id }, function(err, data) {
+				if (err) {
+					console.log("Error occur on query: " + err);
+					writeResponse(resp, { Success: false, Err: "Internal DB Error(query)"});
+					account_db.close();
+					return;
+				}
+				if (data) {
+					/* Found this account => check ip */
+					var curr_ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+					console.log('Try to transfer from account: ' + data.a_id);
+					if (curr_ip === data.user_ip) {
+						if (data.isOnline === true) {
+							var from_addr = data.address;
+							collection.findOne({ a_id: req.query.to_id }, function(err, data) {
+								if (err) {
+									console.log("Error occur on query: " + err);
+									writeResponse(resp, { Success: false, Err: "Internal DB Error(query)"});
+									account_db.close();
+									return;
+								}
+								if (data) {
+									var to_addr = data.address;
+									/* Found this account => can transfer */
+									console.log('Try to transfer to account: ' + data.a_id);
+									transfer(from_addr, to_addr, req.query.amount, resp);
+									console.log('Transfer complete.');
+								}
+								else {
+									/* Account not found => can' transfer */
+									console.log('Account not found');
+									writeResponse(resp, { Success: false, Err: "Account not found(cannot login)"});
+								}
+								account_db.close();
+								return;
+							});
+						}
+						else {
+							/* Cannot transfer */
+							console.log('account: ' + data.a_id + ' has not logged-in');
+							writeResponse(resp, { Success: false, Err: "Account has not logged-in"});
+							account_db.close();
+							return;
+						}
+					}
+					else {
+						console.log('account: ' + data.a_id + ' wrong user_ip');
+						writeResponse(resp, { Success: false, Err: "Wrong user_ip"});
+						account_db.close();
+						return;
+					}
+				}
+				else {
+					/* Account not found => can' transfer */
+					console.log('Account not found');
+					writeResponse(resp, { Success: false, Err: "Account not found(cannot login)"});
+					account_db.close();
+					return;
+				}
+        	});
+		});
+	});
+}
+
+function transfer(from_addr, to_addr, amount, resp) {
+	var transferRPC = {
+		jsonrpc: '2.0',
+		method: 'eth_sendTransaction',
+		params: [{
+			from: from_addr,
+			to: to_addr,
+			value: web3.fromDecimal(web3.toWei(parseFloat(amount), "ether"))
+		}],
+		id: 1
+	};
+	transferCmd = spawn('curl', ['-X', 'POST', '--data', JSON.stringify(transferRPC), RPC_URL]);
+
+	transferCmd.stdout.on('data', function (data) {
+		data = JSON.parse(data);
+		if (!data.result) {
+			console.log('Failed to transfer, Err:' + JSON.stringify(data.error));
+			if (data.error.code === -32000) {
+				writeResponse(resp, { Success: false, Err: "Cannot transfer such large amount" });
+			}
+			else {
+				writeResponse(resp, { Success: false, Err: "Geth error on transfer" });
+			}
+		}
+		else {
+			console.log('Successfully transfer.');
+			writeResponse(resp, { Success: true, Hash: "" + data.result });
+		}
+	});
+
+	// transferCmd.stderr.on('data', function (data) {
+	// 	console.log('stderr: ' + JSON.stringify(data.error));
+	// });
+
+	// transferCmd.on('exit', function (code) {
 	// 	console.log('Geth child process exited with code ' + code.toString());
 	// });
 
@@ -541,4 +678,5 @@ app.get('/login/', onLogin);
 app.get('/logout/', onLogout);
 app.get('/change-passwd/', onChangePasswd);
 app.get('/check-balance/', onCheckBalance);
+app.get('/transfer/', onTransfer);
 app.listen(8787,'0.0.0.0');
