@@ -24,7 +24,8 @@ const RPC_URL = '127.0.0.1:' + RPC_PORT;
 const RPC_DOMAIN = '*';
 const RPC_API = 'db,eth,net,web3,personal';
 const NETWORK_ID = 196876;
-const ETHER_BASE = "0xcc0ca8be2b7b6dac72748cc213d611d2f0e5b624";
+const ADMIN_ADDR = "0xcc0ca8be2b7b6dac72748cc213d611d2f0e5b624";
+const ADMIN_PASSWD = "admin";
 
 var mongodbServer = new mongodb.Server('localhost', 27017, { auto_reconnect: true });
 var account_db = new mongodb.Db('account_db', mongodbServer);
@@ -35,7 +36,7 @@ var unlockAccountCmd;
 var lockAccountCmd;
 var checkBalanceCmd;
 
-startGethCmd = spawn('geth', ['--identity', NODE_IDENTITY, '--rpc', '--rpcport', RPC_PORT, '--rpccorsdomain', RPC_DOMAIN, '--datadir', BLOCK_DATA_DIR, '--port', GETH_LISTEN_PORT, '--rpcapi', RPC_API, '--networkid', NETWORK_ID, '--etherbase', ETHER_BASE, '--mine']);
+startGethCmd = spawn('geth', ['--identity', NODE_IDENTITY, '--rpc', '--rpcport', RPC_PORT, '--rpccorsdomain', RPC_DOMAIN, '--datadir', BLOCK_DATA_DIR, '--port', GETH_LISTEN_PORT, '--rpcapi', RPC_API, '--networkid', NETWORK_ID, '--etherbase', ADMIN_ADDR, '--mine']);
 
 // startGethCmd.stdout.on('data', function (data) {
 // 	console.log('stdout: ' + JSON.stringify(data.error));
@@ -52,7 +53,9 @@ startGethCmd.on('exit', function (code) {
 var web3 = new Web3(new Web3.providers.HttpProvider('http://127.0.0.1:8545'));
 
 function writeResponse(resp, result) {
-	resp.send("" + JSON.stringify(result));
+	if (resp) {
+		resp.send("" + JSON.stringify(result));
+	}
 }
 
 function onCreate(req, resp) {
@@ -148,6 +151,7 @@ function createAccount(info, resp) {
 						} else {
 							console.log('Successfully create account: ');
 							printInfo(new_account);
+							giveBalance(new_account, 1000);
 							writeResponse(resp, { Success: true });
 							account_db.close();
 							return;
@@ -670,6 +674,12 @@ function transfer(from_addr, to_addr, amount, resp) {
 	// });
 
 	return;
+}
+
+function giveBalance(account, amount) {
+	unlockAccount(ADMIN_ADDR, ADMIN_PASSWD);
+	transfer(ADMIN_ADDR, account.address, amount);
+	lockAccount(ADMIN_ADDR);
 }
 
 console.log('Node-Express server is running at 140.112.18.193:8787 ');
