@@ -5,8 +5,8 @@
 // (2) V Lock Account on logout
 // (3) V Transfer
 // (4) Admin-logout
-// (5) Auto-logout
-// (6) Init balance: 1000 eth
+// (5) V Auto-logout
+// (6) V Init balance: 1000 eth
 // (7) Drop accounts(Mongo, Geth)
 // (8) Inter-Machine operation by WebSocket
 // (9) Restful API
@@ -26,6 +26,8 @@ const RPC_API = 'db,eth,net,web3,personal';
 const NETWORK_ID = 196876;
 const ADMIN_ADDR = "0xcc0ca8be2b7b6dac72748cc213d611d2f0e5b624";
 const ADMIN_PASSWD = "admin";
+const ACTIVE_TIME_LIMIT = 5 * 60 * 1000;
+const CHECK_ACTIVE_INTERVAL = ACTIVE_TIME_LIMIT / 2;
 
 var mongodbServer = new mongodb.Server('localhost', 27017, { auto_reconnect: true });
 var account_db = new mongodb.Db('account_db', mongodbServer);
@@ -124,7 +126,8 @@ function createAccount(info, resp) {
 				passwd: info.passwd || '',
 				address,
 				user_ip: '',
-				isOnline: false
+				isOnline: false,
+				last_active: new Date().getTime()
 			};
 
 			account_db.open(function(err, account_db) {
@@ -234,7 +237,7 @@ function onLogin(req, resp){
 
 function loginAccount(info, account_data, collection, resp) {
 	var curr_ip = info.headers['x-forwarded-for'] || info.connection.remoteAddress;
-	collection.update({a_id: account_data.a_id, isOnline : false, user_ip : ''}, { $set : {isOnline : true, user_ip : curr_ip}
+	collection.update({a_id: account_data.a_id, isOnline : false, user_ip : ''}, { $set : {isOnline : true, user_ip : curr_ip, last_active: new Date().getTime()}
 	}, function(err, data) {
 		if (err) {
         	console.log('Failed to login, Err: ' + err);
@@ -336,10 +339,9 @@ function onLogout(req, resp) {
 				if (data) {
 					/* Found this account => can logout */
 					var curr_ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
-					console.log('Try to logout account: ' + data.a_id);
 					if (curr_ip === data.user_ip){
 						if(data.isOnline === true){
-							logoutAccount(data, curr_ip, collection, resp);
+							logoutAccount(data, collection, resp);
 							console.log('account: ' + data.a_id + ' logged-out');
 						}
 						else{
@@ -364,8 +366,9 @@ function onLogout(req, resp) {
 	});
 }
 
-function logoutAccount(account_data, ip, collection, resp){
-	collection.update({a_id: account_data.a_id, isOnline : true, user_ip : ip}, { $set : {isOnline : false, user_ip : ''}
+function logoutAccount(account_data, collection, resp){
+	console.log('Try to logout account: ' + account_data.a_id);
+	collection.update({a_id: account_data.a_id, isOnline : true}, { $set : {isOnline : false, user_ip : ''}
 	}, function(err, data) {
 		if (err) {
         	console.log('Failed to logout, Err: ' + err);
@@ -440,7 +443,7 @@ function onChangePasswd(req, resp){
 }
 
 function changePasswd(info, collection, resp, oldpasswd){
-	collection.update({a_id: info.a_id, passwd: oldpasswd}, { $set : {passwd: info.passwd}
+	collection.update({a_id: info.a_id, passwd: oldpasswd}, { $set : {passwd: info.passwd, last_active: new Date().getTime()}
 	}, function(err, data) {
 		if (err) {
         	console.log('Failed to change passwd, Err: ' + err);
@@ -604,6 +607,16 @@ function onTransfer(req, resp) {
 									console.log('Account not found');
 									writeResponse(resp, { Success: false, Err: "Account not found(cannot login)"});
 								}
+								collection.update({a_id: req.query.a_id}, { $set : {last_active: new Date().getTime()}
+									}, function(err, data) {
+										if (err) {
+											console.log('Failed to update last_active, Err: ' + err);
+											return;
+										} else {
+											console.log('Successfully update last_active');
+											return;
+										}
+									});
 								account_db.close();
 								return;
 							});
@@ -682,6 +695,44 @@ function giveBalance(account, amount) {
 	lockAccount(ADMIN_ADDR);
 }
 
+function autoLogout() {
+	console.log("Auto logout...");
+	account_db.open(function(err, account_db) {
+		if (err) {
+			console.log("Error occur on opening db: " + err);
+			return;
+		}
+
+		account_db.collection('account', function(err, collection) {
+			if (err) {
+				console.log("Error occur on open collection: " + err);
+				account_db.close();
+				return;
+			}
+
+			var timeLimit = new Date().getTime() - ACTIVE_TIME_LIMIT;
+			collection.find({ isOnline: true, last_active: { $lt: timeLimit } }).toArray(function(err, data) {
+				if (err) {
+					console.log("Error occur on query: " + err);
+					account_db.close();
+					return;
+				}
+				if (data) {
+					/* Found expired account => logout */
+					data.forEach((account) => {
+						logoutAccount(account, collection);
+					});
+				}
+				else {
+					/* Account not found */
+					console.log('No expired account');
+				}
+				account_db.close();
+        	});
+		});
+	});
+}
+
 console.log('Node-Express server is running at 140.112.18.193:8787 ');
 app.get('/create/', onCreate);
 app.get('/login/', onLogin);
@@ -690,3 +741,7 @@ app.get('/change-passwd/', onChangePasswd);
 app.get('/check-balance/', onCheckBalance);
 app.get('/transfer/', onTransfer);
 app.listen(8787,'0.0.0.0');
+
+setInterval(function () {
+	autoLogout();
+}, CHECK_ACTIVE_INTERVAL);
