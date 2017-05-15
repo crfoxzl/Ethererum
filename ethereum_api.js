@@ -4,7 +4,7 @@
 // (1) V Unlock Account on login
 // (2) V Lock Account on logout
 // (3) V Transfer
-// (4) Admin-logout
+// (4) V Admin-logout
 // (5) V Auto-logout
 // (6) V Init balance: 1000 eth
 // (7) Drop accounts(Mongo, Geth)
@@ -358,21 +358,21 @@ function onLogout(req, resp) {
 				}
 				if (data) {
 					/* Found this account => can logout */
-					var curr_ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
-					if (curr_ip === data.user_ip){
-						if(data.isOnline === true){
+					if (data.isOnline === true) {
+						var curr_ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+						if (curr_ip === data.user_ip){
 							logoutAccount(data, collection, resp);
 							console.log('account: ' + data.a_id + ' logged-out');
 						}
-						else{
-							/* Cannot logout */
-							console.log('account: ' + data.a_id + ' has not logged-in');
-							writeResponse(resp, { Success: false, Err: "Account has not logged-in"});
+						else {
+							//account_db.close();
+							adminLogout(data, curr_ip, resp);
 						}
 					}
 					else {
-						console.log('account: ' + data.a_id + ' wrong user_ip');
-						writeResponse(resp, { Success: false, Err: "Wrong user_ip"});
+						/* Cannot logout */
+						console.log('account: ' + data.a_id + ' has not logged-in');
+						writeResponse(resp, { Success: false, Err: "Account has not logged-in"});
 					}
 				}
 				else {
@@ -386,7 +386,42 @@ function onLogout(req, resp) {
 	});
 }
 
-function logoutAccount(account_data, collection, resp){
+function adminLogout(account_data, curr_ip, resp) {
+	account_db.collection('account', function(err, collection) {
+		if (err) {
+			console.log("Error occur on open collection: " + err);
+			writeResponse(resp, { Success: false, Err: "Internal DB Error(collection)"});
+			account_db.close();
+			return;
+		}
+		collection.findOne({ a_id: 'admin' }, function(err, data) {
+			if (err) {
+				console.log("Error occur on query: " + err);
+				writeResponse(resp, { Success: false, Err: "Internal DB Error(query)"});
+				account_db.close();
+				return;
+			}
+			if (data) {
+				// Admin account found
+				if (data.isOnline === true && curr_ip === data.user_ip) {
+					logoutAccount(account_data, collection, resp);	
+				}
+				else {
+					console.log("Non-admin cannot logout other's account");
+					writeResponse(resp, { Success: false, Err: "You cannot logout other's account!"});
+				}
+			}
+			else {
+				/* Admin account not found => can' logout */
+				console.log('Admin account not found');
+				writeResponse(resp, { Success: false, Err: "You cannot logout other's account!"});
+			}
+			account_db.close();
+		});
+	});
+}
+
+function logoutAccount(account_data, collection, resp) {
 	console.log('Try to logout account: ' + account_data.a_id);
 	collection.update({a_id: account_data.a_id, isOnline : true}, { $set : {isOnline : false, user_ip : ''}
 	}, function(err, data) {
