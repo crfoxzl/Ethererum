@@ -12,10 +12,11 @@
 // (8) Inter-Machine operation by WebSocket
 // (9) Restful API
 
-var Web3 = require('web3');
-var mongodb = require('mongodb');
-var express = require('express');
-var spawn = require('child_process').spawn;
+const Web3 = require('web3');
+const mongodb = require('mongodb');
+const express = require('express');
+const spawn = require('child_process').spawn;
+const crypto = require('crypto');
 
 const NODE_IDENTITY = 'Node01';
 const BLOCK_DATA_DIR = '/home/pc193/ethereum/chain1/';
@@ -134,8 +135,12 @@ function startServer() {
 //----------------------- Utility Functions -----------------------//
 
 function writeResponse(resp, result) {
+	var ret = {};
+	ret.jsonrpc = '2.0';
+	ret.id = 1;
+	ret.result = result;
 	if (resp) {
-		resp.send("" + JSON.stringify(result));
+		resp.send("" + JSON.stringify(ret));
 	}
 }
 
@@ -235,13 +240,12 @@ function onLogout(req, resp) {
 		if (data) {
 			/* Found this account => can logout */
 			if (data.isOnline === true) {
-				var curr_ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
-				if (curr_ip === data.user_ip){
+				if (req.query.hash === data.hash){
 					logoutAccount(data, resp);
 					console.log('account: ' + data.a_id + ' logged-out');
 				}
 				else {
-					adminLogout(data, curr_ip, resp);
+					adminLogout(data, resp);
 				}
 			}
 			else {
@@ -272,9 +276,8 @@ function onChangePasswd(req, resp){
 		}
 		if (data) {
 			/* Found this account => can change passwd */
-			var curr_ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
 			console.log('Try to change passwd, account: ' + data.a_id);
-			if (curr_ip === data.user_ip){
+			if (req.query.hash === data.hash){
 				if(data.isOnline === true){
 					changePasswd(req.query, resp, data.passwd);
 					console.log('account: ' + data.a_id + ' has changed passwd');
@@ -286,8 +289,8 @@ function onChangePasswd(req, resp){
 				}
 			}
 			else {
-				console.log('account: ' + data.a_id + ' wrong user_ip');
-				writeResponse(resp, { Success: false, Err: "Wrong user_ip"});
+				console.log('account: ' + data.a_id + ' wrong user');
+				writeResponse(resp, { Success: false, Err: "Wrong user"});
 			}
 		}
 		else {
@@ -346,10 +349,9 @@ function onTransfer(req, resp) {
 			return;
 		}
 		if (data) {
-			/* Found this account => check ip */
-			var curr_ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+			/* Found this account => check hash token */
 			console.log('Try to transfer from account: ' + data.a_id);
-			if (curr_ip === data.user_ip) {
+			if (req.query.hash === data.hash) {
 				if (data.isOnline === true) {
 					var from_addr = data.address;
 					account_collection.findOne({ a_id: req.query.to_id }, function(err, data) {
@@ -391,8 +393,8 @@ function onTransfer(req, resp) {
 				}
 			}
 			else {
-				console.log('account: ' + data.a_id + ' wrong user_ip');
-				writeResponse(resp, { Success: false, Err: "Wrong user_ip"});
+				console.log('account: ' + data.a_id + ' wrong user');
+				writeResponse(resp, { Success: false, Err: "Wrong user"});
 				return;
 			}
 		}
@@ -418,6 +420,10 @@ function createAccount(info, resp) {
 		params: [info.passwd],
 		id: 1
 	};
+	const create_time = new Date().getTime()
+	const client_id = info.a_id + info.passwd + create_time;
+	const secret = 'NTU_ethereum';
+	const hash = crypto.createHmac('sha256',secret).update(client_id).digest('hex')
 	createAccountCmd = spawn('curl', ['-X', 'POST', '--data', JSON.stringify(createRPC), RPC_URL]);
 
 	createAccountCmd.stdout.once('data', function (data) {
@@ -432,9 +438,9 @@ function createAccount(info, resp) {
 				a_id: info.a_id,
 				passwd: info.passwd || '',
 				address,
-				user_ip: '',
 				isOnline: false,
-				last_active: new Date().getTime()
+				last_active: new Date().getTime(),
+				hash
 			};
 
 			account_collection.insert(new_account, function(err, data) {
@@ -446,7 +452,7 @@ function createAccount(info, resp) {
 					console.log('Successfully create account: ');
 					printInfo(new_account);
 					giveBalance(new_account, 1000);
-					writeResponse(resp, { Success: true });
+					writeResponse(resp, { Success: true, Hash: new_account.hash });
 					return;
 				}
 			});
@@ -467,9 +473,9 @@ function createAccount(info, resp) {
 }
 
 function loginAccount(info, account_data, resp) {
-	var curr_ip = info.headers['x-forwarded-for'] || info.connection.remoteAddress;
+	//var curr_ip = info.headers['x-forwarded-for'] || info.connection.remoteAddress;
 
-	account_collection.update({a_id: account_data.a_id, isOnline : false, user_ip : ''}, { $set : {isOnline : true, user_ip : curr_ip, last_active: new Date().getTime()}
+	account_collection.update({a_id: account_data.a_id, isOnline : false }, { $set : {isOnline : true, last_active: new Date().getTime()}
 	}, function(err, data) {
 		if (err) {
         	console.log('Failed to login, Err: ' + err);
@@ -478,7 +484,7 @@ function loginAccount(info, account_data, resp) {
         } else {
             console.log('Successfully login, unlocking account...');
 			unlockAccount(account_data.address, account_data.passwd);
-            writeResponse(resp, { Success: true });
+            writeResponse(resp, { Success: true, LoginID: account_data.a_id, Hash: account_data.hash});
             return;
         }
 	});
@@ -551,7 +557,7 @@ function lockAccount(account_data) {
 	// }, CMD_TIME_LIMIT);
 }
 
-function adminLogout(account_data, curr_ip, resp) {
+function adminLogout(account_data, resp) {
 	account_collection.findOne({ a_id: 'admin' }, function(err, data) {
 		if (err) {
 			console.log("Error occur on query: " + err);
@@ -560,7 +566,7 @@ function adminLogout(account_data, curr_ip, resp) {
 		}
 		if (data) {
 			// Admin account found
-			if (data.isOnline === true && curr_ip === data.user_ip) {
+			if (data.isOnline === true) {
 				logoutAccount(account_data, resp);
 			}
 			else {
@@ -578,7 +584,7 @@ function adminLogout(account_data, curr_ip, resp) {
 
 function logoutAccount(account_data, resp) {
 	console.log('Try to logout account: ' + account_data.a_id);
-	account_collection.update({a_id: account_data.a_id, isOnline : true}, { $set : {isOnline : false, user_ip : ''}
+	account_collection.update({a_id: account_data.a_id, isOnline : true}, { $set : {isOnline : false }
 	}, function(err, data) {
 		if (err) {
         	console.log('Failed to logout, Err: ' + err);
@@ -587,7 +593,7 @@ function logoutAccount(account_data, resp) {
         } else {
             console.log('Successfully logout, locking account...');
 			lockAccount(account_data);
-            writeResponse(resp, { Success: true });
+            writeResponse(resp, { Success: true, LogoutID: account_data.a_id });
             return;
         }
 	});
@@ -602,7 +608,7 @@ function changePasswd(info, resp, oldPasswd){
             return;
         } else {
             console.log('Successfully change passwd');
-            writeResponse(resp, { Success: true });
+            writeResponse(resp, { Success: true, account_id: info.a_id });
             return;
         }
 	});
@@ -671,7 +677,7 @@ function transfer(from_addr, to_addr, amount, resp, callback) {
 		}
 		else {
 			console.log('Successfully transfer.');
-			writeResponse(resp, { Success: true, Hash: "" + data.result });
+			writeResponse(resp, { Success: true, TransactionID: "" + data.result });
 			if (callback) {
 				callback();
 			}
