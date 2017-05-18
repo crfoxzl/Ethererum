@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>My Wallet --- C-Coin</title>
+  <link rel="stylesheet" href="style/style.css">
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+  <script src="js/main.js"></script>
+</head>
+
+<body onload="loadEvents(['wallet'])">
+  <img class="loader" src="img/loading.png"></img>
+  <div class="top-bar">
+    <h1>My Wallet</h1>
+  </div>
+  <div class="wallet-page">
+      <div class="wallet-wrapper">
+        <div class="wallet-header">
+            <h2 class="wallet-title">--</h2>
+            <div class="wallet-nav">
+                <ul>
+                    <li><a class="info-tab">Info</a></li>
+                    <li><a class="transfer-tab">Transfer</a></li>
+                    <li><a class="logout-tab">Logout</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="wallet-content">
+            <div class="wallet-content-info">
+                <table class="wallet-content-info-table">
+                    <tr>
+                        <th>Account ID  :</th>
+                        <th id="wallet-info-aid">--</th>
+                    </tr>
+                    <tr>
+                        <th>Balance    :</th>
+                        <th id="wallet-info-balance">--</th>
+                    </tr>
+                </table>
+                <div class="wallet-content-refresh-wrapper">
+                    <button id="wallet-content-refresh-btn" class="wallet-content-btn">Refresh</button>
+                </div>
+            </div>
+            <div class="wallet-content-transfer">
+                <form class="form wallet-content-transfer-form">
+                    <input id="transfer-toid" type="text" name="to_id" placeholder="Receiver ID"/>
+                    <input id="transfer-amount" type="text" name="amount" placeholder="Amount (eth)"/>
+                    <input class="submit-btn transfer-submit-btn" type="submit" />
+                </form>
+            </div>
+            <div class="wallet-content-logout">
+                <div class="wallet-content-logout-wrapper">
+                    <button id="wallet-content-logout-btn" class="wallet-content-btn">Logout</button>
+                </div>
+            </div>
+        </div>
+      </div>
+  </div>
+</body>
+
+</html>

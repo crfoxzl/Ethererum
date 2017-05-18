@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Login --- C-Coin</title>
+  <link rel="stylesheet" href="style/style.css">
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+  <script src="js/main.js"></script>
+</head>
+
+<body onload="loadEvents(['register', 'login'])">
+  <img class="loader" src="img/loading.png"></img>
+  <div class="top-bar">
+    <h1>Welcome to C-Coin!</h1>
+  </div>
+  <div class="login-page">
+    <div class="form">
+      <form class="register-form">
+        <h2 class="form-title">Register</h2>
+        <input class="register-a_id" type="text" name="a_id" placeholder="name"/>
+        <input class="register-passwd" type="password" name="passwd" placeholder="password"/>
+        <input class="submit-btn" type="submit"></input>
+        <p class="message">Already registered? <a href="#">Sign In</a></p>
+      </form>
+      <form class="login-form">
+        <h2 class="form-title">Login</h2>
+        <input class="login-a_id" type="text" name="a_id" placeholder="name"/>
+        <input class="login-passwd" type="password" name="passwd" placeholder="password"/>
+        <input class="submit-btn" type="submit"></input>
+        <p class="message">Not registered? <a href="#">Create an account</a></p>
+      </form>
+    </div>
+  </div>
+</body>
+
+</html>

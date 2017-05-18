@@ -114,6 +114,7 @@ function exitHandler(options, err) {
 
 function startServer() {
 	console.log('Node-Express server is running at 140.112.18.193:8787 ');
+	app.use('/', express.static(__dirname + '/HTML'));
 	app.get('/create/', onCreate);
 	app.get('/login/', onLogin);
 	app.get('/logout/', onLogout);
